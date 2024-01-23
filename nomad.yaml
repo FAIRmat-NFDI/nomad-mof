@@ -1,0 +1,6 @@
+plugins:
+  exclude:
+    - parsers/mof
+  options:
+    parsers/mof:
+      python_package: nomad_mof

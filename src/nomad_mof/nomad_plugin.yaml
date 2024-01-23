@@ -1,0 +1,7 @@
+description: This is a plugin for schemas and parsing for MOFs.
+name: parsers/mof
+plugin_type: parser
+mainfile_mime_re: text/.*|application/zip
+mainfile_name_re: ^.*\.json|^.*\.cif|^.*\.zip$
+parser_class_name: nomad_mof.MOFParser
+code_name: MOF Parser
