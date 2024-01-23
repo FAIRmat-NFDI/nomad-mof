@@ -230,7 +230,7 @@ class Citation(PublicationReference):
     pass
 
 
-class MOFData(EntryData):
+class MOF(EntryData):
     '''
     '''
     m_def = Section(
@@ -263,9 +263,6 @@ class MOFData(EntryData):
             component=ELNComponentEnum.StringEditQuantity)
         )
 
-
-    # description = Quantity(
-    #     type=str, a_eln=dict(component='RichTextEditQuantity'))
 
     mof_generalities=SubSection(section_def=GeneralMOFData)
     mof_experimental_synthetic_condition=SubSection(

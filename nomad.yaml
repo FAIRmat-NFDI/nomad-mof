@@ -1,3 +1,12 @@
+normalize:
+  normalizers:
+    options:
+      PorosityNormalizer: 'nomad.normalizing.porosity.PorosityNormalizer'
+  include:
+      - SystemNormalizer
+      - PorosityNormalizer
+      - OptimadeNormalizer
+
 plugins:
   exclude:
     - parsers/mof
