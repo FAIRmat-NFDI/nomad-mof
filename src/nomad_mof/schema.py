@@ -18,19 +18,112 @@
 import numpy as np
 from nomad.metainfo import ( Package, Quantity, SubSection, Section)
 from nomad.datamodel.data import EntryData, ArchiveSection, UseCaseElnCategory
-from nomad.datamodel.metainfo.eln import ElnWithStructureFile, PublicationReference
+from nomad.datamodel.metainfo.eln import PublicationReference
 from nomad.datamodel.metainfo.basesections import PubChemPureSubstanceSection
+from nomad.datamodel.results import Material
 from nomad.datamodel.metainfo.annotations import (
     ELNAnnotation,
     ELNComponentEnum,
 )
+import ase
+from nomad.normalizing import normalizers
+from nomad.units import ureg
+from nomad.datamodel.metainfo import runschema
+# from nomad.normalizing.common import load_structure_file
+from nomad.normalizing.porosity import create_topology_porosity
+# from nomad.datamodel.results import Material
+# from nomad.atomutils import load_structure_file
+m_package = Package(name='MOF Parser', version='version_0.0.1')
 
-m_package = Package(name='MOF Schema', version='version_0.0.1')
+
+# class MofAtoms(ArchiveSection):
+#     """
+#     A base section for for parsing crystal structure files, e.g. `.cif`, and
+#     populating the Material section in Results.
+#     """
+
+#     structure_file = Quantity(
+#         type=str,
+#         description='The structure file.',
+#         a_eln=dict(component='FileEditQuantity'),
+#     )
+
+#     def normalize(self, archive, logger):
+#         super(MofAtoms, self).normalize(archive, logger)
+
+#         if self.structure_file:
+#             from ase.io import read
+#             from nomad.normalizing.results import ResultsNormalizer
+#             from nomad.normalizing.porosity import PorosityNormalizer
+#             from nomad.normalizing.system import SystemNormalizer
+#             from nomad.normalizing.optimade import OptimadeNormalizer
+#             from nomad.datamodel.metainfo.simulation.run import Run
+#             from nomad.datamodel.metainfo.simulation.run import Program
+
+#             with archive.m_context.raw_file(self.structure_file) as f:
+#                 try:
+#                     structure = read(f.name)
+#                     print (structure)
+#                 except Exception as e:
+#                     raise ValueError('could not read structure file') from e
+
+#                 run = Run()
+#                 archive.run = [run]
+#                 system = SystemTheory()
+#                 system.atoms = Atoms()
+#                 try:
+#                     system.atoms.lattice_vectors = structure.get_cell() * ureg.angstrom
+#                 except Exception as e:
+#                     logger.warn(
+#                         'Could not parse lattice vectors from structure file.',
+#                         exc_info=e,
+#                     )
+#                 system.atoms.labels = structure.get_chemical_symbols()
+#                 system.atoms.positions = structure.get_positions() * ureg.angstrom
+#                 try:
+#                     system.atoms.periodic = structure.get_pbc()
+#                 except Exception as e:
+#                     logger.warn(
+#                         'Could not parse periodicity from structure file.', exc_info=e
+#                     )
+#                     system.atoms.periodic = [True, True, True]
+#                 system.atoms.species = structure.get_atomic_numbers()
+#                 archive.run[0].system = [system]
+#                 program = Program()
+#                 archive.run[0].program = program
+#                 archive.run[0].program.name = 'Structure File Importer'
+#                 system_normalizer = SystemNormalizer(archive)
+#                 system_normalizer.normalize()
+#                 porosity_normalizer= PorosityNormalizer(archive)
+#                 porosity_normalizer.normalize()
+#                 optimade_normalizer = OptimadeNormalizer(archive)
+#                 optimade_normalizer.normalize()
+#                 results_normalizer = ResultsNormalizer(archive)
+#                 results_normalizer.normalize()
+
+#         # TODO: rewrite it in a way in which the run section is not needed and System is
+#         # directly added to the archive.data
+#         # set run to None if exist
+#         if archive.run:
+#             archive.run = None
 
 
-class MofAtoms(ElnWithStructureFile):
-    pass
-
+def load_structure_file(upload_file):
+    """
+    Function to read an upload file using ase,
+    convert it into a nomad atom and then parse
+    it to a system
+    """
+    read_atom = ase.io.read(upload_file)
+    atoms = runschema.system.Atoms()
+    system = runschema.system.System(atoms=atoms)
+    system.atoms.positions = read_atom.get_positions() * ureg.angstrom
+    system.atoms.labels = read_atom.get_chemical_symbols()
+    system.atoms.atomic_numbers = read_atom.get_atomic_numbers()
+    system.atoms.species = read_atom.get_atomic_numbers()
+    system.atoms.lattice_vectors = read_atom.get_cell() * ureg.angstrom
+    system.atoms.periodic = read_atom.get_pbc()
+    return system
 
 class TimeQuantity(ArchiveSection):
     """
@@ -52,7 +145,6 @@ class TimeQuantity(ArchiveSection):
         """,
         a_eln=dict(component='StringEditQuantity')
     )
-
 
 class ReagentQuantities(ArchiveSection):
     """
@@ -200,7 +292,7 @@ class GeneralMOFData(ArchiveSection):
         a_eln=dict(component='StringEditQuantity')
     )
 
-    mof_f_factor = Quantity(
+    mof_r_factor = Quantity(
         type=np.dtype(np.float64),
         description='The r-factor of the crystal, which is a measure of how well the refined structure matches the powder diffraction pattern',
         a_eln=dict(component='NumberEditQuantity')
@@ -230,7 +322,7 @@ class Citation(PublicationReference):
     pass
 
 
-class MOF(EntryData):
+class MOFData(EntryData):
     '''
     '''
     m_def = Section(
@@ -263,12 +355,42 @@ class MOF(EntryData):
             component=ELNComponentEnum.StringEditQuantity)
         )
 
+    structure_file = Quantity(
+        type=str,
+        description='The structure file.',
+        a_eln=dict(component='FileEditQuantity', overview=True),
+    )
 
     mof_generalities=SubSection(section_def=GeneralMOFData)
     mof_experimental_synthetic_condition=SubSection(
         section_def=ExperimentalData)
     citation=SubSection(section_def=Citation)
-    mof_atoms=SubSection(section_def=MofAtoms)
+
+    def normalize(self, archive, logger):
+        super(MOFData, self).normalize(archive, logger)
+        if self.structure_file:
+            with archive.m_context.raw_file(self.structure_file) as f:
+                try:
+                    system =  load_structure_file(f.name)
+                except Exception as e:
+                    raise ValueError('could not read structure file') from e
+            if system.atoms:
+                run = runschema.run.Run()
+                run.system.append(system)
+                archive.run.append(run)
+                system_normalizer = None
+                for normalizer in normalizers:
+                    if normalizer.python_package == 'systemnormalizer':
+                        system_normalizer = normalizer
+                        break
+                    if system_normalizer is not None:
+                        system_normalizer(archive).normalize()
+
+                created_system = create_topology_porosity(system)
+                material = archive.m_setdefault('results.material')
+                if created_system:
+                    for system in created_system:
+                        material.m_add_sub_section(Material.topology, system)
 
 
 m_package.__init_metainfo__()

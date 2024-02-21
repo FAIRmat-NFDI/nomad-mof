@@ -1,15 +1,19 @@
 normalize:
   normalizers:
     options:
-      PorosityNormalizer: 'nomad.normalizing.porosity.PorosityNormalizer'
-  include:
+      PorosityNormalizer: "nomad.normalizing.porosity.PorosityNormalizer"
+      system_normalizer:
+        python_package: systemnormalizer
+    include:
+      - system_normalizer
       - SystemNormalizer
       - PorosityNormalizer
       - OptimadeNormalizer
+      - WorkflowNormalizer
+      - ResultsNormalizer
+      - MetainfoNormalizer
 
 plugins:
-  exclude:
-    - parsers/mof
   options:
     parsers/mof:
       python_package: nomad_mof
